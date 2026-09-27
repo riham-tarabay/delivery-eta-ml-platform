@@ -1,0 +1,21 @@
+{
+  "dataset": "Brazilian E-Commerce Public Dataset by Olist",
+  "publisher": "Olist",
+  "source_url": "https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce",
+  "download_url": "https://www.kaggle.com/api/v1/datasets/download/olistbr/brazilian-ecommerce",
+  "license": "CC BY-NC-SA 4.0",
+  "archive_sha256": "967e41e04fc306fe604e2a693f488995a8b41e5047418f8a5c8e4abd6deca784",
+  "historical_coverage": "2016-2018",
+  "local_only_policy": "Raw files and trained artifacts are not committed or redistributed from this public repository.",
+  "target": "delivery_days = order_delivered_customer_date - order_purchase_timestamp",
+  "target_eligibility": "Delivered orders with non-null, non-negative elapsed delivery time",
+  "verified_archive_profile": {
+    "orders": 99441,
+    "eligible_delivered_orders_used": 96470,
+    "order_items": 112650,
+    "customers": 99441,
+    "sellers": 3095,
+    "products": 32951,
+    "payments": 103886
+  }
+}

@@ -1,118 +1,93 @@
 # Delivery ETA ML Platform
 
-A portfolio project demonstrating a small end-to-end ML service for delivery ETA prediction: reproducible model training, online REST inference, batch scoring, event-driven inference with Redis Streams, persistence in PostgreSQL, Docker Compose, Kubernetes deployment manifests, health checks, metrics, and tests.
+A portfolio project demonstrating an end-to-end delivery ETA workflow: point-in-time feature engineering, chronological evaluation, baseline/model comparison, error analysis, reproducible offline inference, REST inference, event-driven scoring, Docker Compose, Kubernetes manifests, health checks, metrics, and tests.
 
-> **Data and claims:** the model is trained on deterministic synthetic data created by this repository. It is not trained on Snoonu, Qatar, customer, or real delivery data. Reported metrics are only a reproducibility check and must not be presented as real-world accuracy or production impact. This is a portfolio system, not a production deployment.
+> **Data and claims:** The real-data workflow uses the anonymised [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce), whose canonical metadata reports **CC BY-NC-SA 4.0**. It is used locally for a noncommercial, retrospective demonstration. Raw data and generated model artifacts are not committed. Results do not establish current operational accuracy, production readiness, or professional ML experience.
 
-## Architecture
+## What changed
 
-```text
-Client --POST /v1/predict--> FastAPI --> sklearn pipeline
-Client --POST /v1/predict/batch--------------^ 
-Client --POST /v1/events--> Redis Stream --> worker --> sklearn pipeline
-                                             |           |--> PostgreSQL prediction record
-                                             |           `--> delivery:predictions stream
-                                             `--> delivery:dead-letter on processing failure
-```
+The original deterministic synthetic demo remains available for API compatibility and fast tests. The upgraded Olist workflow adds:
 
-The API serves synchronous online and batch predictions. Event requests are acknowledged after being added to a Redis Stream; a consumer group worker scores them asynchronously, persists results, and emits a result event. A unique event ID and database constraint make result persistence idempotent for duplicate deliveries. Failed events are recorded in a dead-letter stream for inspection.
+- order-level aggregation across orders, items, products, sellers, customers, and payments;
+- a purchase-time feature contract that rejects target and post-delivery fields;
+- a chronological train/validation/test split;
+- median and recorded-promise baselines plus Ridge and Random Forest comparisons;
+- MAE, RMSE, P90 absolute error, and eligible-order coverage;
+- EDA summary, largest-error output, and customer-state error slices;
+- deterministic local batch scoring with artifact/schema checks; and
+- provenance, licensing, leakage, selection-bias, and deployment limitations.
 
-## Requirements
+The target is `delivery_days`: elapsed time from `order_purchase_timestamp` to `order_delivered_customer_date`, restricted to eligible delivered orders. `order_estimated_delivery_date` is treated as a recorded customer-promise baseline, not as a target or historical stream of model predictions.
 
-- Python 3.11+ for local development
-- Docker and Docker Compose for the integrated stack
-- `kubectl` and a Kubernetes cluster only for the optional deployment exercise
+## Olist local workflow
 
-## Run locally
+The repository deliberately does not redistribute the dataset. Download it locally and record its provenance/hash:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate
 python -m pip install -r requirements-dev.txt
-python scripts/train_model.py
-pytest -q
+PYTHONPATH=src python scripts/download_olist.py
 ```
 
-The training command creates an ignored model artifact and metrics file under `artifacts/`. To run the API without Docker after training:
+Train, compare models, and generate reports:
 
 ```bash
+PYTHONPATH=src python scripts/train_olist_model.py
+cat artifacts/olist/metrics.json
+cat reports/olist/eda_summary.json
+```
+
+The command writes ignored outputs under `artifacts/olist/` and `reports/olist/`. Score the raw local Olist orders with the selected artifact:
+
+```bash
+PYTHONPATH=src python scripts/score_olist.py \
+  --raw-dir data/raw/olist \
+  --artifact artifacts/olist/eta_olist_model.joblib \
+  --output artifacts/olist/predictions.csv
+```
+
+The feature builder aggregates one-to-many item rows before splitting and excludes delivery timestamps, final status, reviews, and other outcome fields from the purchase-time matrix. Missing delivery timestamps are not silently imputed as targets; they are outside the regression eligibility set and the resulting completion-selection bias is documented.
+
+See [`data/README.md`](data/README.md) for the license, provenance, local-data policy, and source link. See [`docs/olist-provenance.json`](docs/olist-provenance.json) for the pinned archive hash, [`docs/olist-results.md`](docs/olist-results.md) for verified experiment results, and [`docs/dataset-and-scope-verification.md`](docs/dataset-and-scope-verification.md) for the dataset comparison and bounded scope.
+
+## Existing online/event-driven service
+
+The original service contract remains available for the lightweight synthetic demonstration:
+
+```text
+Client --POST /v1/predict--> FastAPI --> sklearn pipeline
+Client --POST /v1/predict/batch--------------^
+Client --POST /v1/events--> Redis Stream --> worker --> sklearn pipeline
+                                             |           |--> PostgreSQL prediction record
+                                             |           `--> delivery:predictions stream
+                                             `--> delivery:dead-letter on failure
+```
+
+Run the original reproducible artifact and tests:
+
+```bash
+python scripts/train_model.py
+pytest -q
 PYTHONPATH=src uvicorn delivery_eta.api:app --reload
 ```
 
-Interactive API documentation: `http://localhost:8000/docs`.
+The API provides `/health/live`, `/health/ready`, `/metrics`, `/v1/predict`, `/v1/predict/batch`, and `/v1/events`. It has no authentication and must not be exposed publicly without access control.
 
-## Run the integrated services
+## Integrated services and deployment validation
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-The API is available at `http://localhost:8000`; the API image trains its reproducible sample model during build. Set non-default credentials in a local `.env` before using anything beyond local development. Do not use the example password in shared environments.
+The Kubernetes manifests in `infra/k8s/` include non-root execution, dropped Linux capabilities, read-only root filesystems, resource requests/limits, and health probes. They require an immutable image tag, external secrets, and review before any real deployment. The Olist model is intentionally not baked into the public image because the dataset is noncommercial and local-only.
 
-## Example requests
+## Evaluation scope and limitations
 
-Single prediction:
+The real-data experiment is deliberately bounded:
 
-```bash
-curl -X POST http://localhost:8000/v1/predict \\
-  -H 'Content-Type: application/json' \\
-  -d '{"order_id":"demo-001","distance_km":4.2,"order_hour":18,"traffic_index":6.1,"weather":"rain","pickup_wait_min":3,"rider_experience_months":12,"is_weekend":false}'
-```
+- **In scope:** retrospective purchase-time regression, chronological order-level splitting, feature availability checks, EDA, model comparison, segment error analysis, deterministic inference, and container/configuration checks.
+- **Out of scope:** real-time carrier tracking, revised ETA streams, traffic/weather signals, online retraining, survival modeling for undelivered orders, causal claims, current operational benchmarking, SLAs, and commercial/public redistribution without permission.
 
-Batch prediction uses `POST /v1/predict/batch` with `{"orders":[...]}`. Event ingestion uses `POST /v1/events` with a UUID `event_id`, `order_id`, and nested `features`; successful requests return HTTP 202. The worker writes predictions to the `predictions` table and `delivery:predictions` Redis stream. See OpenAPI docs for exact schemas.
-
-## Operational endpoints
-
-- `GET /health/live` — process liveness
-- `GET /health/ready` — model readiness and model version
-- `GET /metrics` — Prometheus-format request count and inference latency
-
-## Offline batch scoring
-
-Prepare a CSV with `order_id` plus all model feature columns, then run:
-
-```bash
-PYTHONPATH=src python scripts/score_batch.py orders.csv scored.csv
-```
-
-The output preserves input columns and adds `predicted_eta_minutes` and `model_version`.
-
-## Train and inspect the model
-
-```bash
-python scripts/train_model.py
-cat artifacts/metrics.json
-```
-
-The training script uses a fixed seed, train/test split, preprocessing pipeline, and regression metrics. Since the generated data follows a synthetic formula, those scores only check the implementation; they do not validate real operational performance.
-
-## Kubernetes exercise
-
-1. Build and publish the Docker image under your GitHub Container Registry namespace.
-2. Create namespace `eta-platform` and a Kubernetes Secret named `delivery-eta-secrets` containing `DATABASE_URL` and `REDIS_URL` for approved external services.
-3. Replace `ghcr.io/OWNER/...` in `infra/k8s/*.yaml` with the exact immutable image tag.
-4. Apply the manifests and check rollouts, probes, logs, resource use, and API responses.
-
-```bash
-kubectl create namespace eta-platform
-kubectl -n eta-platform create secret generic delivery-eta-secrets \\
-  --from-literal=DATABASE_URL='...' --from-literal=REDIS_URL='...'
-kubectl apply -f infra/k8s/api.yaml
-kubectl apply -f infra/k8s/worker.yaml
-kubectl -n eta-platform rollout status deployment/eta-api
-kubectl -n eta-platform rollout status deployment/eta-worker
-```
-
-Do not commit the secret or paste credentials into GitHub. The manifests are a learning/portfolio example and require review, network policies, external secret management, autoscaling decisions, backups, and production observability before real use.
-
-## Testing
-
-`pytest -q` covers deterministic data generation, model save/load and inference, offline CSV scoring, request validation, online/request-batch response contracts, event enqueueing, readiness, and metrics exposure. Redis/PostgreSQL integration and Kubernetes deployment checks should be run against the Docker Compose stack/cluster before describing those components as tested.
-
-## Limitations and next steps
-
-- Synthetic training data; no real delivery dataset or verified business performance.
-- No authentication on the sample API; do not expose it publicly without adding access control.
-- The demo does not implement a full feature store, model registry, drift response policy, or autoscaling strategy.
-- Add integration tests for Redis Streams/PostgreSQL, load tests, and a documented model rollback procedure before treating it as operationally hardened.
+A successful run is evidence of a reproducible portfolio workflow. It is not evidence of live logistics impact or professional ML experience.
