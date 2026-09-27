@@ -1,0 +1,10 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+scikit-learn>=1.5,<2
+pandas>=2.2,<4
+numpy>=1.26,<3
+joblib>=1.4,<2
+redis>=5,<7
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
+prometheus-client>=0.20,<1

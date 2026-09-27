@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eta-api
+  namespace: eta-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: eta-api}
+  template:
+    metadata:
+      labels: {app: eta-api}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: api
+          image: ghcr.io/OWNER/delivery-eta-ml-platform:latest
+          ports: [{name: http, containerPort: 8000}]
+          env:
+            - {name: MODEL_PATH, value: /app/artifacts/eta_model.joblib}
+            - {name: REDIS_URL, valueFrom: {secretKeyRef: {name: delivery-eta-secrets, key: REDIS_URL}}}
+            - {name: DATABASE_URL, valueFrom: {secretKeyRef: {name: delivery-eta-secrets, key: DATABASE_URL}}}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          startupProbe: {httpGet: {path: /health/live, port: http}, failureThreshold: 30, periodSeconds: 5}
+          readinessProbe: {httpGet: {path: /health/ready, port: http}, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health/live, port: http}, periodSeconds: 20}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eta-api
+  namespace: eta-platform
+spec:
+  selector: {app: eta-api}
+  ports: [{name: http, port: 80, targetPort: http}]
