@@ -11,3 +11,7 @@ A deterministic synthetic dataset makes the project runnable without private or 
 ## ADR-003: Containerized dependencies, externalized production state
 
 Docker Compose provides local Redis and PostgreSQL. Kubernetes manifests deploy stateless API and worker containers while expecting approved external Redis/PostgreSQL endpoints and Kubernetes Secrets. The included manifests are a starting point, not a production blueprint.
+
+## ADR-004: Governed optional Olist serving path
+
+The Olist model is served through a separate, opt-in FastAPI contract rather than silently replacing the original demo model. `OLIST_MODEL_PATH` enables the path, while the artifact loader verifies the exact feature list and model metadata before serving. `/health/olist-ready` is independent from the base service readiness check, and responses include both the model version and `olist-features-v1` contract version. This keeps the public image runnable without restricted Olist data while making the real-data model deployable through an approved artifact volume or model registry.

@@ -19,6 +19,12 @@ The original deterministic synthetic demo remains available for API compatibilit
 
 The target is `delivery_days`: elapsed time from `order_purchase_timestamp` to `order_delivered_customer_date`, restricted to eligible delivered orders. `order_estimated_delivery_date` is treated as a recorded customer-promise baseline, not as a target or historical stream of model predictions.
 
+## AI Engineer evidence
+
+This repository is intentionally structured as a professional-style case study rather than a claim of prior employment. It demonstrates Python/scikit-learn modeling, large-table analysis, evaluation methodology, system integration, versioned serving contracts, deployment hardening, monitoring hooks, and technical documentation. The optional Olist service uses `OLIST_MODEL_PATH`, validates the exact feature contract before serving, exposes `/health/olist-ready`, and returns model and contract versions with predictions.
+
+See [`docs/model-card.md`](docs/model-card.md) for intended use and limitations, [`docs/production-runbook.md`](docs/production-runbook.md) for release/monitoring/rollback controls, and [`docs/cv-case-study.md`](docs/cv-case-study.md) for truthful CV wording and one concrete interview example.
+
 ## Olist local workflow
 
 The repository deliberately does not redistribute the dataset. Download it locally and record its provenance/hash:
